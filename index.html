@@ -71,16 +71,23 @@
         let countries = data[1];
         let population = data[2];
 
+        // Example of how to get the Country names for each data point
+        console.log(who[0].Country);
+        console.log(countries.features[0].properties.name);
+        console.log(population[41].name);
         let fieldColor = 'Total fertility rate (per woman)';
         let fieldXAxis = "Urban_population_growth";
         let fieldYAxis = "Urban_population_pct_of_total";
 
         who.forEach(d => {
+
             if(d[fieldColor] == '') {
                 d[fieldColor] = undefined;
             };
         });
 
+        // for all the country names that match between population and who
+        // set a value who.id = population.id
         population.forEach(d =>
         {
             var res = who.find(e =>
@@ -89,27 +96,57 @@
             });
             if(typeof res !== 'undefined') {
                 res.id = d.id;
+
             }
+
+        });
+        console.log(who[0].id);
+        who.forEach(d => { // TODO check with TA about data cleaning here.
+            // console.log(d.id);
+            if(typeof d.id === 'undefined' || d.id[0] ==="1" || d.id[0] ==="2" || d.id === 7.2 ){
+                d.id = "999"
+            }
+            fertilityById[d.id] = +d[fieldColor];
+            // console.log(d.id);
         });
 
-        who.forEach(d => { fertilityById[d.id] = +d[fieldColor]; });
-        countries.features.forEach(d => { d.population = fertilityById[d.id] });
 
-        svg.append('g')
+        countries.features.forEach(d => { d.population = fertilityById[d.id] });
+        console.log(countries.features[0].population);
+
+        map.append('g')
 				.attr('class', 'countries')
 				.selectAll('path')
-				.data(countries.features)
+				.data(countries.features) // data is country.features
 				.enter().append('path')
-                .attr("class", d => { return "COUNTRY-CODE-"+d.id;} )
+                .attr("class", d =>  d.id)//{ return "COUNTRY-CODE-"+d.id;} )
 				.attr('d', path)
 				.style('fill', d => color(fertilityById[d.id]))
 				.style('stroke', 'white')
 				.style('opacity', 0.8)
 				.style('stroke-width', 0.3)
-				.on('mouseover',function(d){})
-				.on('mouseout', function(d){});
 
-		svg.append('path')
+                .on("mousedown", function(d) {
+                    console.log(d.id);
+                    // How do we get the current color of this d object
+                    console.log(d3.select(this).style("fill"));
+                    // console.log(typeof d3.select(this).style("fill"));
+
+                    let currentColor = d3.select(this).style("fill");  // could also do this.setAttribute this.setStyle
+
+                    if(currentColor !== "darkred"){
+                        console.log("change to red");
+                        d3.selectAll("."+d.id).style("fill", "darkred");
+                    }
+                    else{
+                        console.log("change back");
+                        d3.selectAll("."+d.id).style("fill" , color(fertilityById[d.id]))
+                    }
+
+                });
+
+
+		map.append('path')  //TODO figure out what this does
 				.datum(topojson.mesh(countries.features, (a, b) => a.id !== b.id))
 				.attr('class', 'names')
 				.attr('d', path);
@@ -156,18 +193,32 @@
             .text(fieldYAxis.replace(/_/g, " "));
 
         // draw dots
-        scatterplot.selectAll(".dot")
+       let dots = scatterplot.selectAll("dot")
             .data(who)
             .enter().append("circle")
-            .attr("class", d => { return "dot COUNTRY-"+d.Country; } )
+            .attr("class", (d) => d.id )
             .attr("r", 3.5)
             .attr("cx", xMap)
             .attr("cy", yMap)
-            .style("fill", function(d) { return color(d[fieldColor]);})
-            .on("mouseover", function(d) {})
-            .on("mouseout", function(d) {});
+            .style("fill", function(d) { return color(d[fieldColor]);});
 
-        // draw legend
+        dots.on("mouseover", function(d) {
+
+                console.log(d.id);
+                d3.selectAll("."+d.id)
+                .style("fill", "darkred");
+
+            })
+            .on("mouseout", function(d) {// for v6 function(event, d)
+                d3.selectAll("."+d.id)
+                .style("fill", function(d) {
+                    return color(fertilityById[d.id]);
+                })
+            });
+
+
+
+
         var legend = scatterplot.append("g").attr("class", "legend-group").selectAll(".legend")
             .data(color.domain())
             .enter().append("g")
@@ -199,7 +250,56 @@
             .attr("dy", "1.5em")
             .style("text-anchor", "end")
             .text(fieldColor);
+
+        const scatBrush = d3.brush()
+            .extent([[0,-10], [400, 400]])
+        .on("start brush", dotsUpdateChart);
+
+        scatterplot.append("g")
+            .call(scatBrush);
+
+
+        function dotsUpdateChart() {
+            extent = d3.event.selection
+            console.log(extent)
+
+            console.log(dots._groups[0].length);
+
+            dots.each(function(d){
+                let groupId = d.id;
+                console.log(groupId);
+                if(groupId !== "999") {
+                    if (isBrushed(extent, xMap(d), yMap(d))) {
+                        console.log("TRUE");
+
+                        d3.selectAll("." + d.id)
+                            .style("fill", function (d) {
+                                return "darkred";
+                            });
+
+                    } else {
+                        console.log("FALSE")
+                        d3.selectAll("." + d.id)
+                            .style("fill", function (d) {
+                                return color(fertilityById[d.id]);
+                            });
+                    }
+                }
+            });
+
+            function isBrushed(area, cx, cy){
+                var x0 = area[0][0],
+                    x1 = area[1][0],
+                    y0 = area[0][1],
+                    y1 = area[1][1];
+                return x0 <= cx && cx <= x1 && y0 <= cy && cy <= y1;
+            }
+
+        };
+
     });
+
+
 
 </script>
 </body>
